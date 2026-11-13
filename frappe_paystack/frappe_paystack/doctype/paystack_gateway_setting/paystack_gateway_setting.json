@@ -21,6 +21,7 @@
   "checkout_mode",
   "payment_link_validity_hours",
   "auto_refund_on_credit_note",
+  "auto_send_payment_link",
   "allowed_webhook_ips",
   "section_break_settlement",
   "settlement_bank_account",
@@ -107,6 +108,13 @@
    "fieldtype": "Check",
    "label": "Auto Refund on Credit Note",
    "description": "Automatically initiate a Paystack refund when a credit note is submitted against a Paystack-paid invoice."
+  },
+  {
+   "default": "0",
+   "fieldname": "auto_send_payment_link",
+   "fieldtype": "Check",
+   "label": "Email Payment Link on Invoice Submit",
+   "description": "When a Sales Invoice with an amount outstanding is submitted, create its Paystack payment link and email it to the customer."
   },
   {
    "fieldname": "allowed_webhook_ips",
