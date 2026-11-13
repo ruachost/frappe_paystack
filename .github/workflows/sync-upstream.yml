@@ -1,0 +1,41 @@
+name: Sync upstream (opens a review PR)
+
+# Weekly: merge mymi14s/frappe_paystack (version-15) into branch upstream-sync and open a PR.
+# Nothing reaches version-15 (what the ERP image builds from) until the PR is reviewed and merged.
+# A merge conflict (e.g. with the RNIL passed-fee patch in api.py) fails this run: resolve by hand.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: version-15
+          fetch-depth: 0
+      - name: Merge upstream
+        run: |
+          git config user.name "ruachost-sync"
+          git config user.email "sync@ruachost.com"
+          git remote add upstream https://github.com/mymi14s/frappe_paystack.git
+          git fetch upstream version-15
+          if git merge-base --is-ancestor upstream/version-15 HEAD; then
+            echo "Already up to date with upstream"; exit 0
+          fi
+          git checkout -B upstream-sync version-15
+          git merge upstream/version-15 --no-edit
+          git push -f origin upstream-sync
+          if [ -z "$(gh pr list --head upstream-sync --base version-15 --json number --jq '.[0].number')" ]; then
+            gh pr create --base version-15 --head upstream-sync \
+              --title "Sync upstream frappe_paystack" \
+              --body "Upstream changes merged. Review (check passed_fee / book_passed_fee in api.py still work), test on staging, then merge and rebuild the image."
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
