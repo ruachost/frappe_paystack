@@ -1,11 +1,11 @@
 name: Sync upstream (opens a review PR)
 
-# Weekly: merge mymi14s/frappe_paystack (version-15) into branch upstream-sync and open a PR.
+# Monthly (1st, 06:00 UTC): merge mymi14s/frappe_paystack (version-15) into branch upstream-sync and open a PR.
 # Nothing reaches version-15 (what the ERP image builds from) until the PR is reviewed and merged.
 # A merge conflict (e.g. with the RNIL passed-fee patch in api.py) fails this run: resolve by hand.
 on:
   schedule:
-    - cron: "0 6 * * 1"
+    - cron: "0 6 1 * *"
   workflow_dispatch:
 
 permissions:
