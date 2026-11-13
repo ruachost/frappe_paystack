@@ -151,9 +151,56 @@ def settlement_mismatch(log: Any, request: Any) -> Optional[str]:
     if abs(captured - outstanding) <= SETTLEMENT_TOLERANCE:
         return None
 
+    # RNIL patch: with "Pass fees to customers" on, Paystack captures the bill plus its fee.
+    if abs(captured - passed_fee(log, request) - outstanding) <= SETTLEMENT_TOLERANCE:
+        return None
+
     return _("Paystack captured {0} but Payment Request {1} bills {2}. Settle this payment manually.").format(
         captured, request.name, outstanding
     )
+
+
+def passed_fee(log: Any, request: Any) -> float:
+    """RNIL patch: the fee Paystack added on top of the bill, in the document's currency.
+
+    Zero unless the capture exceeds the bill, so a plain underpayment is never excused."""
+    rate = flt(frappe.db.get_value(request.reference_doctype, request.reference_name, "conversion_rate")) or 1
+    captured = flt(log.amount_paid) / rate
+    fee = flt(log.paystack_fee) / rate
+    if fee <= 0 or captured <= flt(request.outstanding_amount):
+        return 0.0
+    return flt(fee, request.precision("grand_total"))
+
+
+def book_passed_fee(log: Any, request: Any, outstanding: float) -> None:
+    """RNIL patch: credit the fee account with the fee the customer paid.
+
+    The payout entry later debits the fee account for what Paystack kept, so the two
+    net to zero and the clearing account empties exactly."""
+    from frappe_paystack.utils.settlement import settlement_gateway
+
+    fee = passed_fee(log, request)
+    if not fee:
+        return
+    if frappe.db.exists("Journal Entry", {"cheque_no": log.name, "docstatus": 1, "user_remark": ["like", "Paystack fee passed%"]}):
+        return
+
+    gateway = settlement_gateway(log.company)
+    if not gateway or not gateway.suspense_account or not gateway.paystack_fee_account:
+        return
+
+    cost_center = frappe.get_cached_value("Company", log.company, "cost_center")
+    entry = frappe.new_doc("Journal Entry")
+    entry.voucher_type = "Journal Entry"
+    entry.company = log.company
+    entry.posting_date = log.payment_date or frappe.utils.nowdate()
+    entry.cheque_no = log.name
+    entry.cheque_date = entry.posting_date
+    entry.user_remark = f"Paystack fee passed to customer on {request.reference_name} (log {log.name})"
+    entry.append("accounts", {"account": gateway.suspense_account, "debit_in_account_currency": fee, "cost_center": cost_center})
+    entry.append("accounts", {"account": gateway.paystack_fee_account, "credit_in_account_currency": fee, "cost_center": cost_center})
+    entry.insert(ignore_permissions=True)
+    entry.submit()
 
 
 def settle_request(log: Any, request: Any) -> None:
@@ -206,6 +253,15 @@ def notify_payment_authorized(log: Any) -> None:
 
         payment_entry = resolve_payment_entry(request.name)
         if payment_entry:
+            try:
+                book_passed_fee(log, request, flt(request.outstanding_amount))
+            except Exception:
+                log_error_for(
+                    title=f"Paystack passed-fee entry failed: {log.name}",
+                    message=frappe.get_traceback(),
+                    reference_doctype=LOG_DOCTYPE,
+                    reference_name=log.name,
+                )
             frappe.db.set_value(
                 "Paystack Payment Log",
                 log.name,
