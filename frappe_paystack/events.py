@@ -75,6 +75,19 @@ def send_invoice_payment_link(invoice: str) -> None:
             f'<p>Or open this link: <a href="{url}">{url}</a></p>'
             "<p>Thank you.</p>"
         )
+        # RNIL patch: send from the mailbox chosen on the gateway setting (e.g. Finance),
+        # not whatever the system default outgoing account happens to be.
+        mail_kwargs = {}
+        account = frappe.db.get_value(
+            "Paystack Gateway Setting",
+            {"enabled": 1, "company": doc.company},
+            "payment_link_email_account",
+        )
+        if account and frappe.db.exists("Email Account", account):
+            mail_kwargs = {
+                "email_account": account,
+                "sender": frappe.db.get_value("Email Account", account, "email_id"),
+            }
         make(
             doctype="Sales Invoice",
             name=invoice,
@@ -82,6 +95,7 @@ def send_invoice_payment_link(invoice: str) -> None:
             subject=f"Payment link for {invoice}",
             recipients=recipient,
             send_email=True,
+            **mail_kwargs,
         )
     except Exception:
         frappe.log_error(title=f"Paystack payment-link email failed: {invoice}", message=frappe.get_traceback())
