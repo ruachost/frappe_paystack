@@ -22,6 +22,7 @@
   "payment_link_validity_hours",
   "auto_refund_on_credit_note",
   "auto_send_payment_link",
+  "payment_link_email_account",
   "allowed_webhook_ips",
   "section_break_settlement",
   "settlement_bank_account",
@@ -115,6 +116,13 @@
    "fieldtype": "Check",
    "label": "Email Payment Link on Invoice Submit",
    "description": "When a Sales Invoice with an amount outstanding is submitted, create its Paystack payment link and email it to the customer."
+  },
+  {
+   "fieldname": "payment_link_email_account",
+   "fieldtype": "Link",
+   "options": "Email Account",
+   "label": "Payment Link Email Account",
+   "description": "Mailbox the payment-link email is sent from (e.g. Finance). Leave empty to use the system default outgoing account."
   },
   {
    "fieldname": "allowed_webhook_ips",
